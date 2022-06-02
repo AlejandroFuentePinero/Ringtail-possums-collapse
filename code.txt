@@ -1,0 +1,53 @@
+{
+  # Priors
+  for(t in 1:nyears){
+    p0[t] ~ dunif(0,1)
+    alpha0[t] <- log(p0[t]/(1-p0[t]))
+    }   
+  tau.lp <- 1 / (sigma.p*sigma.p)
+  sigma.p ~ dunif(0,10) 
+  beta.date ~ dunif(-5,5)  
+  beta0 ~ dunif(-5,5)
+  beta.tmean ~ dunif(-5,5)
+  beta.trend ~ dunif(-1,1)
+  beta.nts ~ dunif(-5,5)
+  beta.hot ~ dunif(-5,5) 
+  # Likelihood      
+      # Ecological model for true abundance  
+  for (i in 1:nsites){
+    for(t in 1:nyears){
+      N[i,t] ~ dpois(lambda[i,t])
+      log(lambda[i,t]) <- beta0  + beta.tmean * t.wind[t] + beta.trend * (t-15.5) + beta.hot * hot[t]  + beta.nts * nts[i]  
+      # Observation model for replicated counts 
+       for (j in 1:nsurveys){ 
+        C[i,j,t] ~ dbin(p[i,j,t], N[i,t]) 
+        p[i,j,t] <- exp(lp[i,j,t])/(1+exp(lp[i,j,t])) 
+        lp[i,j,t] ~ dnorm(mu.lp[i,j,t], tau.lp) 
+        mu.lp[i,j,t] <- alpha0[t] + beta.date * date[i,j,t]
+      } } }
+    # Derived quantity: Total abundance across all surveyed sites
+  for (t in 1:nyears){
+    totalN[t] <- sum(N[,t])
+  }
+  # extinction probability
+   for(t in 1:nyears){
+     for(d in 1:5){ # absolute and quasi extinction thresholds (50,70,80, 90, and 100% decline)
+   quasi_extinction[d,t] <- step(D[d] - totalN[t])
+    }  }
+  # Computation of fit statistic
+for(t in 1:nyears){
+ for(i in 1:nsites){
+  for(j in 1:nsurveys){
+ # Actual data 
+ eval[i,j,t] <-N[i,t]*p[i,j,t] # Expected value 
+ sd.resi[i,j,t]<-sqrt(eval[i,j,t]*(1-p[i,j,t])) +0.5 
+ E[i,j,t]<-(C[i,j,t]-eval[i,j,t])/ sd.resi[i,j,t] 
+ E2[i,j,t] <- pow(E[i,j,t],2)  
+ # Replicate data sets
+C.new[i,j,t]~dbin(p[i,j,t],N[i,t]) 
+E.new[i,j,t]<-(C.new[i,j,t]-eval[i,j,t])/sd.resi[i,j,t]
+E2.new[i,j,t] <- pow(E.new[i,j,t], 2)
+    } } }
+fit <- sum(E2[,,])
+fit.new <- sum(E2.new[,,])
+}
